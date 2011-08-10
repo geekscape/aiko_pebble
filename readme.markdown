@@ -1,4 +1,4 @@
-Aiko Pebble sketch (version 0.2)
+Aiko Pebble sketch (version 0.3)
 ==================
 
 This project is part of the
