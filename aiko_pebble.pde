@@ -217,6 +217,10 @@ void setup() {
   Events.addHandler(lcdHandler,    1000);
 #endif
 
+#ifdef LCD_4094
+  Events.addHandler(pebbleLedHandler, 5000);  // can't be faster than lcdHandler
+#endif
+
 #ifdef HAS_POTENTIOMETER
   Events.addHandler(potentiometerHandler, 100);
 #endif
@@ -622,6 +626,8 @@ void resetLcdCommand(void) {
 }
 
 #ifdef LCD_4094
+int pebbleLedStatus = true;
+
 // LCD pin bit-patterns, output from MC14094 -> LCD KS0066 input
 #define LCD_ENABLE_HIGH 0x10  // MC14094 Q4 -> LCD E
 #define LCD_ENABLE_LOW  0xEF  //   Enable (high) / Disable (low)
@@ -678,6 +684,13 @@ void lcdWrite(
     for (byte loop2 = 0; loop2 < 3; loop2 ++) {  // LCD ENABLE LOW -> HIGH -> LOW
       output = (loop2 == 1) ? (output | LCD_ENABLE_HIGH) : (output & LCD_ENABLE_LOW);
 
+      if (pebbleLedStatus) {
+        output = output | 0x80;
+      }
+      else {
+        output = output & 0x7F;
+      }
+
       shiftOut(PIN_LCD_DATA, PIN_LCD_CLOCK, LSBFIRST, output);
       digitalWrite(PIN_LCD_STROBE, HIGH);
       delayMicroseconds(10);
@@ -707,6 +720,10 @@ void lcdWriteString(
   char message[]) {
 
   while (*message) lcdWrite((*message ++), true);
+}
+
+void pebbleLedHandler(void) {
+  pebbleLedStatus = ! pebbleLedStatus;
 }
 #else
 #include <LiquidCrystal.h>
