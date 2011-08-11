@@ -181,10 +181,14 @@ void setup() {
   Events.addHandler(currentClampHandler,  1);
   Events.addHandler(powerOutputHandler,   1000 * DEFAULT_TRANSMIT_RATE);
 #endif
+
+//setup_mqtt();
 }
 
 void loop() {
   Events.loop();
+
+//loop_mqtt();
 }
 
 /* -------------------------------------------------------------------------- */
