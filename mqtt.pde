@@ -6,10 +6,10 @@
 #define CLIENT_ID   "0: "
 #define GREETING    "0: Hello world"
 byte mac[]     = {  0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
-byte ip[]      = { 192, 168, 192,  66 };
-byte gateway[] = { 192, 168, 192, 254 };
+byte ip[]      = { 192, 168,   1, 253 };
+byte gateway[] = { 192, 168,   1, 254 };
 byte netmask[] = { 255, 255, 255,   0 };
-byte server[]  = { 192, 168, 192,  17 };
+byte server[]  = { 192, 168,   1,   1 };
 
 void callback(
   char* topic,
