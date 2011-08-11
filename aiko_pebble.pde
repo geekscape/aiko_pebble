@@ -1,5 +1,5 @@
-/* aiko_node.pde
- * ~~~~~~~~~~~~~
+/* aiko_pebble.pde
+ * ~~~~~~~~~~~~~~~
  * Please do not remove the following notices.
  * Copyright (c) 2009 by Geekscape Pty. Ltd.
  * Documentation:  http://groups.google.com/group/aiko-platform
@@ -51,11 +51,6 @@
  * - Improve error handling.
  */
 
-#include <AikoEvents.h>
-#include <AikoSExpression.h>
-
-using namespace Aiko;
-
 //#define IS_GATEWAY
 #define IS_PEBBLE
 //#define IS_STONE
@@ -72,11 +67,11 @@ using namespace Aiko;
 #ifdef IS_PEBBLE
 #define DEFAULT_NODE_NAME "pebble_1"
 #define DEFAULT_TRANSMIT_RATE     1  // seconds
-#define HAS_BUTTONS
+#define ENABLE_AIKO_DEVICE_BUTTON
 #define HAS_LCD
 #define LCD_4094      // Drive LCD wth 4094 8-bit shift register to save Arduino pins
 //#define HAS_HP_LD220  // Hewlett-Packard Point-Of-Sale sign
-#define HAS_POTENTIOMETER
+#define ENABLE_AIKO_DEVICE_POTENTIOMETER
 #define HAS_SENSORS
 //#define HAS_SPEAKER
 #endif
@@ -93,7 +88,6 @@ using namespace Aiko;
 // Digital Input/Output pins
 #define PIN_SERIAL_RX       0
 #define PIN_SERIAL_TX       1
-#define PIN_LED_STATUS     13 // Standard Arduino flashing LED !
 
 #ifdef IS_GATEWAY
 // Analogue Input pins
@@ -106,8 +100,6 @@ using namespace Aiko;
 #ifdef IS_PEBBLE
 // Analogue Input pins
 #define PIN_LIGHT_SENSOR    0
-#define PIN_POTENTIOMETER   1
-#define PIN_BUTTONS         2
 // Digital Input/Output pins
 #define PIN_LCD_STROBE      2 // CD4094 8-bit shift/latch
 #define PIN_LCD_DATA        3 // CD4094 8-bit shift/latch
@@ -136,70 +128,16 @@ using namespace Aiko;
 char globalBuffer[BUFFER_SIZE];  // Store dynamically constructed strings
 PString globalString(globalBuffer, sizeof(globalBuffer));
 
-void (*commandHandlers[])() = {
-#ifdef HAS_LCD
-  alertCommand,
-  displayCommand,
-#endif
-  baudRateCommand,
-  nodeCommand,
-  relayCommand,
-#ifdef PIN_RELAY_2
-  relay2Command,
-#endif
-  resetClockCommand,
-  resetLcdCommand,
-  transmitRateCommand
-};
+#include <AikoCommands.h>
+#include <AikoDevices.h>
+#include <AikoEvents.h>
+#include <AikoSExpression.h>
 
-char* commands[] = {
-#ifdef HAS_LCD
-  "alert",
-  "display",
-#endif
-  "baud=",
-  "node=",
-  "relay",
-#ifdef PIN_RELAY_2
-  "relay2",
-#endif
-  "reset_clock",
-  "reset_lcd",
-  "transmit="
-};
+using namespace Aiko;
+using namespace Command;
+using namespace Device;
 
-char* eepromKeyword[] = {
-#ifdef HAS_LCD
-  0,
-  0,
-#endif
-  0,  // "bd",
-  "nd",
-  0,
-  0,
-  0,
-  0   // "tr"
-};
-
-byte parameterCount[] = {  // ToDo: Change this to incorporate parameter type ?
-#ifdef HAS_LCD
-  1,  // alert message   (string)
-  1,  // display message (string)
-#endif
-  1,  // baud rate       (integer)
-  1,  // node name       (string)
-  1,  // relay state     (boolean)
-#ifdef PIN_RELAY_2
-  1,  // relay2 state    (boolean)
-#endif
-  0,  // reset clock     (none)
-  0,  // reset_lcd       (none)
-  1   // transmit rate   (integer seconds)
-};
-
-byte commandCount = sizeof(commands) / sizeof(*commands);
-
-SExpression parameter;
+#include <AikoCommandsHack.h>
 
 void setup() {
 //analogReference(EXTERNAL);
@@ -208,16 +146,20 @@ void setup() {
   Events.addHandler(blinkHandler,   500);
   Events.addHandler(nodeHandler,   1000 * DEFAULT_TRANSMIT_RATE);
 
-#ifdef HAS_BUTTONS
+#ifdef ENABLE_AIKO_DEVICE_BUTTON
   Events.addHandler(buttonHandler,  100);
 #endif
 
 #ifdef HAS_LCD
   Events.addHandler(clockHandler,  1000);
   Events.addHandler(lcdHandler,    1000);
+ #endif
+
+#ifdef LCD_4094
+  Events.addHandler(pebbleLedHandler,    5000); //can't be faster than lcdHandler
 #endif
 
-#ifdef HAS_POTENTIOMETER
+#ifdef ENABLE_AIKO_DEVICE_POTENTIOMETER
   Events.addHandler(potentiometerHandler, 100);
 #endif
 
@@ -244,118 +186,6 @@ void setup() {
 void loop() {
   Events.loop();
 }
-
-/* -------------------------------------------------------------------------- */
-
-byte blinkInitialized = false;
-byte blinkStatus      = LOW;
-
-void blinkInitialize(void) {
-  pinMode(PIN_LED_STATUS, OUTPUT);
-
-  blinkInitialized = true;
-}
-
-void blinkHandler(void) {
-  if (blinkInitialized == false) blinkInitialize();
-
-  blinkStatus = ! blinkStatus;
-  digitalWrite(PIN_LED_STATUS, blinkStatus);
-}
-
-/* -------------------------------------------------------------------------- */
-
-byte second = 0;
-byte minute = 0;
-byte hour   = 0;
-
-void clockHandler(void) {
-  if ((++ second) == 60) {
-    second = 0;
-    if ((++ minute) == 60) {
-      minute = 0;
-      if ((++ hour) == 100) hour = 0;  // Max: 99 hours, 59 minutes, 59 seconds
-    }
-  }
-}
-
-void resetClockCommand(void) {
-  second = minute = hour = 0;
-}
-
-/* -------------------------------------------------------------------------- */
-
-char nodeName[40] = DEFAULT_NODE_NAME;
-
-void nodeHandler(void) {
-  sendMessage("");
-}
-
-void nodeCommand(void) {
-  char* parameterString = parameter.head();
-
-  for (byte index = 0; index < sizeof(nodeName); index ++) {
-    if (index == parameter.size()) {
-      nodeName[index] = '\0';
-      break;
-    }
-
-    nodeName[index] = *parameterString ++;
-  }
-}
-
-void sendMessage(const char* message) {
-  Serial.print("(node ");
-  Serial.print(nodeName);
-  Serial.print(" ? ");
-  Serial.print(message);
-  Serial.println(")");
-}
-
-/* -------------------------------------------------------------------------- */
-
-#ifdef HAS_BUTTONS
-int     buttonValue = 0;
-char    buttonBuffer[5];
-PString buttonState(buttonBuffer, sizeof(buttonBuffer));
-
-void buttonHandler(void) {
-  buttonValue = analogRead(PIN_BUTTONS);
-  buttonState.begin();
-  buttonState = "123 ";
-}
-#endif
-
-/*
-int     buttonValue = 0;
-char    buttonBuffer[4];
-// This should be moved to progmem.
-int buttonStates[] = {1023, 817, 706, 601, 511, 454, 417, 378, 0};
-byte    buttonState;
-
-void buttonHandler(void) {
-  buttonValue = analogRead(PIN_BUTTONS);
-  for (buttonState = 8; buttonState--; buttonState >= 0) {
-    if ((buttonValue - buttonStates[buttonState]) < 5)
-      break;
-  }
-  buttonBuffer[0] = (buttonState & 1)?'1':'.';
-  buttonBuffer[1] = (buttonState & 2)?'2':'.';
-  buttonBuffer[2] = (buttonState & 4)?'3':'.';
-  buttonBuffer[3] = '\0';
-} 
-
-*/
-
-/* -------------------------------------------------------------------------- */
- 
-#ifdef HAS_POTENTIOMETER
-int potentiometerValue = 0;
-
-void potentiometerHandler(void) {
-  potentiometerValue = analogRead(PIN_POTENTIOMETER);
-}
-#endif
 
 /* -------------------------------------------------------------------------- */
 
@@ -622,6 +452,7 @@ void resetLcdCommand(void) {
 }
 
 #ifdef LCD_4094
+int pebbleLedStatus = true;
 // LCD pin bit-patterns, output from MC14094 -> LCD KS0066 input
 #define LCD_ENABLE_HIGH 0x10  // MC14094 Q4 -> LCD E
 #define LCD_ENABLE_LOW  0xEF  //   Enable (high) / Disable (low)
@@ -677,6 +508,13 @@ void lcdWrite(
   for (byte loop1 = 0; loop1 < 2; loop1 ++) {  // First MSN, then LSN
     for (byte loop2 = 0; loop2 < 3; loop2 ++) {  // LCD ENABLE LOW -> HIGH -> LOW
       output = (loop2 == 1) ? (output | LCD_ENABLE_HIGH) : (output & LCD_ENABLE_LOW);
+      if (pebbleLedStatus) {
+       output = output | 0x80;
+      }
+      else {
+       output = output & 0x7F;
+      }
+
 
       shiftOut(PIN_LCD_DATA, PIN_LCD_CLOCK, LSBFIRST, output);
       digitalWrite(PIN_LCD_STROBE, HIGH);
@@ -708,6 +546,10 @@ void lcdWriteString(
 
   while (*message) lcdWrite((*message ++), true);
 }
+
+void pebbleLedHandler(void) {
+  pebbleLedStatus = !pebbleLedStatus;
+}
 #else
 #include <LiquidCrystal.h>
 
@@ -716,7 +558,7 @@ LiquidCrystal lcd(4, 5, 6, 7, 8, 9);
 void lcdInitialize(void) {
   lcdInitialized = true;
 
-  pinMode(OUTPUT, 11);
+  pinMode(11, OUTPUT);
   digitalWrite(11, HIGH);
 
   lcd.begin(16, 2);
@@ -836,7 +678,7 @@ void lcdHandler(void) {
     lcdWriteString(" ");
   }
 
-#ifdef HAS_BUTTONS
+#ifdef ENABLE_AIKO_DEVICE_BUTTON
   lcdPosition(0,20);
   lcdWriteString("But ");
   lcdWriteNumber(buttonValue);
@@ -845,7 +687,7 @@ void lcdHandler(void) {
 //  lcdWriteString(buttonState);
 #endif
 
-#ifdef HAS_POTENTIOMETER
+#ifdef ENABLE_AIKO_DEVICE_POTENTIOMETER
   lcdPosition(0,29);
   lcdWriteString("Pot ");
   lcdWriteNumber(potentiometerValue);
