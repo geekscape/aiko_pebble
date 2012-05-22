@@ -682,7 +682,7 @@ void lcdHandler(void) {
   lcdWriteString(" C  ");
 #endif
 
-  lcdPosition(0, 20);
+  lcdPosition(0, 39);
   if (relay_state) {
     lcdWriteString("A");
   }
@@ -829,14 +829,14 @@ void serialHandler(void) {
 /* -------------------------------------------------------------------------- */
 
 #ifdef HAS_SERIAL_MIRROR
-#include <NewSoftSerial.h>
+#include <SoftwareSerial.h>
 
 #define SERIAL_MIRROR_RX_PIN 2
 #define SERIAL_MIRROR_TX_PIN 3
 
 byte serialMirrorInitialized = false;
 
-NewSoftSerial serialMirror =  NewSoftSerial(SERIAL_MIRROR_RX_PIN, SERIAL_MIRROR_TX_PIN);
+SoftwareSerial serialMirror(SERIAL_MIRROR_RX_PIN, SERIAL_MIRROR_TX_PIN);
 
 #define SERIAL_MIRROR_BUFFER_SIZE 128
 
